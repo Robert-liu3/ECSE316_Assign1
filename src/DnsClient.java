@@ -4,7 +4,6 @@ import java.net.*;
 public class DnsClient {
 
     public static void main(String[] args) throws Exception {
-        System.out.println("Hello world!");
 
         BufferedReader inFromUser = new BufferedReader(new InputStreamReader(System.in));
 
