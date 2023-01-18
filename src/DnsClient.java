@@ -46,23 +46,23 @@ public class DnsClient {
             else if (arg.equals("-ns")) {
                 queryType = "ns";
             }
-            else if (arg.contains("@")) {
+            else if (arg.contains("@")) { //CHANGE THIS BACK TO Q
                 server = arg.replace("@", "");
                 i++;
                 name = inputArgs.get(i);
             }
         }
 
-        System.out.println(port);
+        System.out.println(name);
 
 //        //CREATE CLIENT SOCKET
-//        DatagramSocket clientSocket = new DatagramSocket();
+        DatagramSocket clientSocket = new DatagramSocket();
 //
 //        //TRANSLATE HOSTNAME TO IP ADDRESS USING DNS
-//        InetAddress IPAddress = InetAddress.getByName(dc.server);
+        InetAddress IPAddress = InetAddress.getByName(server);
 //
-//        byte[] sendData = new byte[1024];
-//        byte[] receiveData = new byte[1024];
+        byte[] sendData = new byte[1024];
+        byte[] receiveData = new byte[1024];
 //
 //        String sentence = inFromUser.readLine();
 //        sendData = sentence.getBytes();
