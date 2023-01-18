@@ -1,85 +1,86 @@
 import java.io.*;
 import java.net.*;
 import java.util.ArrayList;
+import java.util.Arrays;
 
 public class DnsClient {
 
-    private int timeout; //OPTIONAL
-    private int max_retries; //OPTIONAL
-    private int port; //OPTIONAL
-    private String queryType; //OPTIONAL
-    private String server; //REQUIRED
-    private String name; //REQUIRED
+    private static int timeout = 5; //OPTIONAL
+    private static int max_retries = 3; //OPTIONAL
+    private static int port = 53; //OPTIONAL
+    private static String queryType; //OPTIONAL
+    private static String server; //REQUIRED
+    private static String name; //REQUIRED
 
     public static void main(String[] args) throws Exception {
 
-        //GETTING USER INPUT
-        BufferedReader inFromUser = new BufferedReader(new InputStreamReader(System.in));
+        // Parsing all arguments from user input to variables above
+        ArrayList<String> inputArgs = new ArrayList<>(Arrays.asList(args));
 
-        //PARSING ALL ARGUMENTS FROM USER INPUT INTO THE GLOBAL VARIABLES
-        ArrayList<String> inFromUserString = new ArrayList<String>();
-        while (inFromUser.readLine() != null) {
-            inFromUserString.add(inFromUser.readLine());
-        }
-        DnsClient dc = new DnsClient();
-        dc.getArgs(inFromUserString);
-
-        //CREATE CLIENT SOCKET
-        DatagramSocket clientSocket = new DatagramSocket();
-
-        //TRANSLATE HOSTNAME TO IP ADDRESS USING DNS
-        InetAddress IPAddress = InetAddress.getByName(dc.server);
-
-        byte[] sendData = new byte[1024];
-        byte[] receiveData = new byte[1024];
-
-        String sentence = inFromUser.readLine();
-        sendData = sentence.getBytes();
-
-        //CREATE DATAGRAM WITH DATA-TO-SEND, LENGTH, IP ADDR, PORT
-        DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, 9876);
-
-        //SEND DATAGRAM TO SERVER
-        clientSocket.send(sendPacket);
-
-        DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
-
-        //READ DATAGRAM FROM SERVER
-        clientSocket.receive(receivePacket);
-
-        String modifiedSentence = new String(receivePacket.getData());
-
-        System.out.println("FROM SERVER:" + modifiedSentence);
-        clientSocket.close();
-    }
-    public void getArgs(ArrayList<String> args) {
-        for (int i = 0; i < args.size(); i++) {
-            if (args.get(i) == "-t") {
-                timeout = Integer.parseInt(args.get(i ++));
-                break;
+        for (int i = 0; i < inputArgs.size(); i++) {
+            String arg = inputArgs.get(i);
+            if (arg.equals("-t")) {
+                try { i++; timeout = Integer.parseInt(inputArgs.get(i)); }
+                catch (NumberFormatException exception) {
+                    System.out.println("ERROR   Incorrect input syntax: Timeout value must be an integer.");
+                    return;
+                }
             }
-            else if (args.get(i) == "-r") {
-                max_retries = Integer.parseInt(args.get(i++));
-                break;
+            else if (arg.equals("-r")) {
+                try { i++; max_retries = Integer.parseInt(inputArgs.get(i)); }
+                catch (NumberFormatException exception) {
+                    System.out.println("ERROR   Incorrect input syntax: Max retries value must be an integer.");
+                    return;
+                }
             }
-            else if (args.get(i) == "-p") {
-                port = Integer.parseInt(args.get(i++));
-                break;
+            else if (arg.equals("-p")) {
+                try { i++; port = Integer.parseInt(inputArgs.get(i)); }
+                catch (NumberFormatException exception) {
+                    System.out.println("ERROR   Incorrect input syntax: Port number must be an integer.");
+                    return;
+                }
             }
-            else if (args.get(i) == "-mx") {
+            else if (arg.equals("-mx")) {
                 queryType = "mx";
             }
-            else if (args.get(i) == "-ns") {
+            else if (arg.equals("-ns")) {
                 queryType = "ns";
             }
-            else if (args.get(i).contains("@")) {
-                String serverNameWithAt = args.get(i);
-                String serverName = serverNameWithAt.replace("@", "");
-                server = serverName;
-                name = args.get(i++);
-                break;
+            else if (arg.contains("@")) {
+                server = arg.replace("@", "");
+                i++;
+                name = inputArgs.get(i);
             }
         }
-    }
 
+        System.out.println(port);
+
+//        //CREATE CLIENT SOCKET
+//        DatagramSocket clientSocket = new DatagramSocket();
+//
+//        //TRANSLATE HOSTNAME TO IP ADDRESS USING DNS
+//        InetAddress IPAddress = InetAddress.getByName(dc.server);
+//
+//        byte[] sendData = new byte[1024];
+//        byte[] receiveData = new byte[1024];
+//
+//        String sentence = inFromUser.readLine();
+//        sendData = sentence.getBytes();
+//
+//        //CREATE DATAGRAM WITH DATA-TO-SEND, LENGTH, IP ADDR, PORT
+//        DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, 9876);
+//
+//        //SEND DATAGRAM TO SERVER
+//        clientSocket.send(sendPacket);
+//
+//        DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
+//
+//        //READ DATAGRAM FROM SERVER
+//        clientSocket.receive(receivePacket);
+//
+//        String modifiedSentence = new String(receivePacket.getData());
+//
+//        System.out.println("FROM SERVER:" + modifiedSentence);
+//        clientSocket.close();
+    }
 }
