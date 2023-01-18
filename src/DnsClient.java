@@ -46,14 +46,16 @@ public class DnsClient {
             else if (arg.equals("-ns")) {
                 queryType = "ns";
             }
-            else if (arg.contains("@")) { //CHANGE THIS BACK TO Q
-                server = arg.replace("@", "");
+            else if (arg.contains("q")) { //CHANGE THIS BACK TO Q
+                server = arg.replace("q", "");
                 i++;
                 name = inputArgs.get(i);
             }
         }
 
-        System.out.println(name);
+        String[] spliited = name.split("\\.");
+
+        System.out.println(spliited[0]);
 
 //        //CREATE CLIENT SOCKET
         DatagramSocket clientSocket = new DatagramSocket();
@@ -82,5 +84,12 @@ public class DnsClient {
 //
 //        System.out.println("FROM SERVER:" + modifiedSentence);
 //        clientSocket.close();
+    }
+
+    public void allocateRequest() {
+        int header_byte = 12; //FROM DNS PRIMER
+        int question_byte = 4; //FROM DNS QUESTIONS
+
+
     }
 }
