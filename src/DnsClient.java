@@ -88,7 +88,7 @@ public class DnsClient {
 
     public void allocateRequest() {
         int header_byte = 12; //FROM DNS PRIMER
-        int question_byte = 4; //FROM DNS QUESTIONS
+        int question_byte = 4; //FROM DNS QUESTIONs
 
 
     }
