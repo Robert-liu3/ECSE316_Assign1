@@ -46,8 +46,8 @@ public class DnsClient {
             else if (arg.equals("-ns")) {
                 queryType = "ns";
             }
-            else if (arg.contains("q")) { //CHANGE THIS BACK TO Q
-                server = arg.replace("q", "");
+            else if (arg.contains("@")) { //CHANGE THIS BACK TO Q
+                server = arg.replace("@", "");
                 i++;
                 name = inputArgs.get(i);
             }
@@ -55,7 +55,7 @@ public class DnsClient {
 
         String[] spliited = name.split("\\.");
 
-        System.out.println(spliited[0]);
+        System.out.println("server name is " + server);
 
 //        //CREATE CLIENT SOCKET
         DatagramSocket clientSocket = new DatagramSocket();
