@@ -69,6 +69,10 @@ public class DnsClient {
          //BYTE BUFFER
         ByteBuffer bb = ByteBuffer.allocate(dc.allocateRequest());
 
+        /*
+         * CREATE DIFFERENT BYTE BUFFERS THEN ADD THE APPROPRIATE HEX CODES TO THEM
+         * such as bb.put(hexcode);
+         */
 //
 //        byte[] sendData = new byte[1024];
 //        byte[] receiveData = new byte[1024];
@@ -101,6 +105,7 @@ public class DnsClient {
         for(String s: domain_parts) {
             qname_byte += s.length();
         }
+
         return header_byte+question_byte+qname_byte;
     }
 }
