@@ -1,5 +1,6 @@
 import java.io.*;
 import java.net.*;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 
@@ -53,6 +54,8 @@ public class DnsClient {
             }
         }
 
+        DnsClient dc = new DnsClient();
+
         String[] spliited = name.split("\\.");
 
         System.out.println("server name is " + server);
@@ -62,10 +65,14 @@ public class DnsClient {
 //
 //        //TRANSLATE HOSTNAME TO IP ADDRESS USING DNS
         InetAddress IPAddress = InetAddress.getByName(server);
+
+         //BYTE BUFFER
+        ByteBuffer bb = ByteBuffer.allocate(dc.allocateRequest());
+
 //
-        byte[] sendData = new byte[1024];
-        byte[] receiveData = new byte[1024];
-//
+//        byte[] sendData = new byte[1024];
+//        byte[] receiveData = new byte[1024];
+////
 //        String sentence = inFromUser.readLine();
 //        sendData = sentence.getBytes();
 //
@@ -86,10 +93,14 @@ public class DnsClient {
 //        clientSocket.close();
     }
 
-    public void allocateRequest() {
+    public int allocateRequest() {
         int header_byte = 12; //FROM DNS PRIMER
-        int question_byte = 4; //FROM DNS QUESTIONs
-
-
+        int question_byte = 5; //FROM DNS QUESTIONs
+        int qname_byte = 0;
+        String[] domain_parts = server.split(".");
+        for(String s: domain_parts) {
+            qname_byte += s.length();
+        }
+        return header_byte+question_byte+qname_byte;
     }
 }
