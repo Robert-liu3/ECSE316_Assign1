@@ -20,6 +20,12 @@ public class DnsClient {
      * Response Global variables
      */
 
+    private static byte[] responseID_G = new byte[2];
+    private static byte[] secondRow_G = new byte[2];
+    private static byte[] QDCOUNT_G = new byte[2];
+    private static int ANCOUNT_INT;
+    private static byte[] ARCOUNT_G = new byte[2];
+
 
     public static void main(String[] args) throws Exception {
 
@@ -241,12 +247,21 @@ public class DnsClient {
         ANCOUNT[0] = receivedData[counter++];
         ANCOUNT[1] = receivedData[counter++]; //7
 
+        int value = 0;
+        for (byte b : ANCOUNT) {
+            value = (value << 8) + (b & 0xFF);
+        }
+        ANCOUNT_INT = value;
+
         counter = counter + 2;
 
         ARCOUNT[0] = receivedData[counter++];
         ARCOUNT[1] = receivedData[counter];
+    }
 
-
+    private static void create_response_answer(int offset) {
+        //offset should be the length of the sent data as the sent data ends at question
+        
     }
 
     public static int getBit(byte b, int position)
