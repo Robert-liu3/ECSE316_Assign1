@@ -47,8 +47,8 @@ public class DnsClient {
             else if (arg.equals("-ns")) {
                 queryType = "ns";
             }
-            else if (arg.contains("@")) { //CHANGE THIS BACK TO Q
-                server = arg.replace("@", "");
+            else if (arg.contains("q")) { //CHANGE THIS BACK TO Q
+                server = arg.replace("q", "");
                 i++;
                 name = inputArgs.get(i);
                 if (server.isBlank()) {
@@ -104,7 +104,7 @@ public class DnsClient {
         DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
 
         //READ DATAGRAM FROM SERVER
-        clientSocket.receive(receivePacket);
+        clientSocket.receive(receivePacket);  //fucks up right here
 
         System.out.println(Arrays.toString(receivePacket.getData()));
 
