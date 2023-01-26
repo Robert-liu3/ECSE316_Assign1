@@ -6,12 +6,20 @@ import java.util.Random;
 
 public class DnsClient {
 
+    /*
+     * Request Global variables
+     */
     private static int timeout = 5; //OPTIONAL
     private static int max_retries = 3; //OPTIONAL
     private static int port = 53; //OPTIONAL
     private static String queryType = "a"; //OPTIONAL
     private static String server; //REQUIRED
     private static String name; //REQUIRED
+
+    /*
+     * Response Global variables
+     */
+
 
     public static void main(String[] args) throws Exception {
 
@@ -23,21 +31,21 @@ public class DnsClient {
             if (arg.equals("-t")) {
                 try { i++; timeout = Integer.parseInt(inputArgs.get(i)); }
                 catch (NumberFormatException exception) {
-                    System.out.println("ERROR   Incorrect input syntax: Timeout value must be an integer.");
+                    System.out.println("ERROR   Incorrect input syntax: Timeout value must be an integer."); //TODO CHANGE THIS
                     return;
                 }
             }
             else if (arg.equals("-r")) {
                 try { i++; max_retries = Integer.parseInt(inputArgs.get(i)); }
                 catch (NumberFormatException exception) {
-                    System.out.println("ERROR   Incorrect input syntax: Max retries value must be an integer.");
+                    System.out.println("ERROR   Incorrect input syntax: Max retries value must be an integer."); //TODO CHANGE THIS
                     return;
                 }
             }
             else if (arg.equals("-p")) {
                 try { i++; port = Integer.parseInt(inputArgs.get(i)); }
                 catch (NumberFormatException exception) {
-                    System.out.println("ERROR   Incorrect input syntax: Port number must be an integer.");
+                    System.out.println("ERROR   Incorrect input syntax: Port number must be an integer."); //TODO CHANGE THIS
                     return;
                 }
             }
@@ -52,10 +60,15 @@ public class DnsClient {
                 i++;
                 name = inputArgs.get(i);
                 if (server.isBlank()) {
-                    System.out.println("ERROR   Incorrect input syntax: Server or domain name is invalid");
+                    System.out.println("ERROR   Incorrect input syntax: Server or domain name is invalid"); //TODO CHANGE THIS
                 }
             }
         }
+
+        /*
+         * REQUEST
+         */
+
 
         //Create client socket
         DatagramSocket clientSocket = new DatagramSocket();
@@ -112,7 +125,22 @@ public class DnsClient {
 
         System.out.println("FROM SERVER:" + modifiedSentence);
         clientSocket.close();
+
+        //receiving data
+        create_response_header(receivePacket.getData());
+
+        /*
+         * RESPONSE
+         */
+
+
+
+
     }
+
+    /*
+     * REQUEST FUNCTIONS
+     */
 
     private static byte[] create_request_question(int domain_length) {
         ByteBuffer question = ByteBuffer.allocate(5 + domain_length);
@@ -171,5 +199,58 @@ public class DnsClient {
         header.put(ARCOUNT);
 
         return header.array();
+    }
+
+    /*
+     * RESPONSE FUNCTIONS
+     */
+
+    private static void create_response_header(byte[] receivedData ) {
+        //storing id of response
+        int counter = 0;
+        byte[] responseID = new byte[2];
+        byte[] secondRow = new byte[2];
+        byte[] QDCOUNT = new byte[2];
+        byte[] ANCOUNT = new byte[2];
+        byte[] ARCOUNT = new byte[2];
+
+        responseID[0] = receivedData[counter++]; //0
+        responseID[1] = receivedData[counter++]; //1
+
+        secondRow[0] = receivedData[counter++]; //2
+        secondRow[1] = receivedData[counter++]; //3
+
+        int QR = getBit(secondRow[0], 0);
+        if (QR == 0) {
+            throw new RuntimeException("ERROR   is not a response.");
+        }
+
+        int AA = getBit(secondRow[0], 5); //AUTHORITY???? DO WE NEED TO WORRY ABOUT IT
+
+        int TC = getBit(secondRow[0], 6);
+
+        int RD = getBit(secondRow[0], 7); //not needed cause query
+
+        int RA = getBit(secondRow[1], 8); //SHOULD BE PRINTED IF SERVER PROVIDED AN ANSWER, IF NOT THEN PRINT ERROR
+
+        int RCODE = secondRow[1] & 15;
+
+        QDCOUNT[0] = receivedData[counter++];
+        QDCOUNT[1] = receivedData[counter++]; //5
+
+        ANCOUNT[0] = receivedData[counter++];
+        ANCOUNT[1] = receivedData[counter++]; //7
+
+        counter = counter + 2;
+
+        ARCOUNT[0] = receivedData[counter++];
+        ARCOUNT[1] = receivedData[counter];
+
+
+    }
+
+    public static int getBit(byte b, int position)
+    {
+        return (b >> position) & 1;
     }
 }
