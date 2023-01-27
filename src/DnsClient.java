@@ -1,5 +1,6 @@
 import java.net.*;
 import java.nio.ByteBuffer;
+import java.sql.SQLOutput;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Random;
@@ -13,8 +14,8 @@ public class DnsClient {
     private static int max_retries = 3; //OPTIONAL
     private static int port = 53; //OPTIONAL
     private static String queryType = "a"; //OPTIONAL
-    private static String server; //REQUIRED
-    private static String name; //REQUIRED
+    private static String server = ""; //REQUIRED
+    private static String name = ""; //REQUIRED
 
     /*
      * Response Global variables
@@ -65,7 +66,7 @@ public class DnsClient {
                 server = arg.replace("@", "");
                 i++;
                 name = inputArgs.get(i);
-                if (server.isBlank()) {
+                if (server.isBlank() || name.isBlank()) {
                     System.out.println("ERROR   Incorrect input syntax: Server or domain name is invalid"); //TODO CHANGE THIS
                 }
             }
@@ -146,13 +147,13 @@ public class DnsClient {
                 System.out.println("FROM SERVER:" + modifiedSentence);
                 clientSocket.close();
 
-                //receiving data
+                //receiving data HEADER
                 create_response_header(receivePacket.getData());
 
-                //ONLY WORKS FOR THE DOMAIN NAME
+                //done for domain name,
                 create_response_answer(ByteBuffer.wrap(receivePacket.getData()), requestData.array().length);
 
-                System.out.println("the name is" + name);
+                System.out.println("the name is " + name);
                 /*
                  * RESPONSE
                  */
@@ -291,22 +292,34 @@ public class DnsClient {
         int pos = receivedData.position();
         String answerName = "";
         while (true) {
-            byte b = receivedData.get();
-            if ((b & 0xc0) == 0xc0) {
-                int newPOS = (receivedData.get() & 0xff) | ((b & 0x3f) << 8);
+            byte currentByte = receivedData.get();
+            if ((currentByte & 0xc0) == 0xc0) {
+                //set to unsigned integer (data & 1111 1111)
+                int firstByte = receivedData.get() & 0xff;
+                //retrieve 6 least significant bits (current byte & 0011 1111)
+                int secondByte = currentByte & 0x3f;
+                //shift secondByte by 8 bits to the left, and combine firstByte - secondByte
+                int newPOS = (firstByte | (secondByte << 8));
                 receivedData.position(newPOS);
                 continue;
             }
-            if (b == 0) {
+            if (currentByte == 0) {
                 break;
             }
             // label
-            int length = b & 0xff;
+            int length = currentByte & 0xff;
             byte[] label = new byte[length];
             receivedData.get(label);
-            answerName = answerName + new String(label);
+            answerName = answerName + new String(label) + ".";
         }
-        receivedData.position(pos);
+
+        short QTYPE = receivedData.position(pos++).getShort();
+        System.out.println("GType is " + QTYPE);
+        int TTL = receivedData.position(pos).getInt();
+        System.out.println("TTL is " + TTL);
+        pos = pos + 2;
+        short RDLENGTH = receivedData.position(pos++).getShort();
+        System.out.println("RDLENGTH is " + RDLENGTH);
         name = answerName;
     }
 
