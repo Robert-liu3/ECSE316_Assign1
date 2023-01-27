@@ -1,5 +1,6 @@
 import java.net.*;
 import java.nio.ByteBuffer;
+import java.sql.SQLOutput;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Random;
@@ -61,8 +62,8 @@ public class DnsClient {
             else if (arg.equals("-ns")) {
                 queryType = "ns";
             }
-            else if (arg.contains("q")) { //CHANGE THIS BACK TO Q
-                server = arg.replace("q", "");
+            else if (arg.contains("@")) { //CHANGE THIS BACK TO Q
+                server = arg.replace("@", "");
                 i++;
                 name = inputArgs.get(i);
                 if (server.isBlank()) {
@@ -135,6 +136,10 @@ public class DnsClient {
         //receiving data
         create_response_header(receivePacket.getData());
 
+        //ONLY WORKS FOR THE DOMAIN NAME
+        create_response_answer(ByteBuffer.wrap(receivePacket.getData()), requestData.array().length);
+
+        System.out.println("the name is" + name);
         /*
          * RESPONSE
          */
@@ -259,9 +264,30 @@ public class DnsClient {
         ARCOUNT[1] = receivedData[counter];
     }
 
-    private static void create_response_answer(int offset) {
+    //FUNCTIONS WORKS WITH NAME ONLY
+    private static void create_response_answer(ByteBuffer receivedData, int offset) {
         //offset should be the length of the sent data as the sent data ends at question
-        
+        receivedData.position(offset);
+        int pos = receivedData.position();
+        String answerName = "";
+        while (true) {
+            byte b = receivedData.get();
+            if ((b & 0xc0) == 0xc0) {
+                int newPOS = (receivedData.get() & 0xff) | ((b & 0x3f) << 8);
+                receivedData.position(newPOS);
+                continue;
+            }
+            if (b == 0) {
+                break;
+            }
+            // label
+            int length = b & 0xff;
+            byte[] label = new byte[length];
+            receivedData.get(label);
+            answerName = answerName + new String(label);
+        }
+        receivedData.position(pos);
+        name = answerName;
     }
 
     public static int getBit(byte b, int position)
