@@ -1,6 +1,5 @@
 import java.net.*;
 import java.nio.ByteBuffer;
-import java.sql.SQLOutput;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Random;
@@ -28,7 +27,7 @@ public class DnsClient {
     private static byte[] ARCOUNT_G = new byte[2];
 
 
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) {
 
         // Parsing all arguments from user input to variables above
         ArrayList<String> inputArgs = new ArrayList<>(Arrays.asList(args));
@@ -72,81 +71,102 @@ public class DnsClient {
             }
         }
 
-        /*
-         * REQUEST
-         */
+        int retries = 0; // used to check if max retries is exceeded
 
+        while (retries < max_retries) {
+            /*
+             * REQUEST
+             */
 
-        //Create client socket
-        DatagramSocket clientSocket = new DatagramSocket();
-
-        //Translate input DNS server to extract ip address
-        String[] stringPts = server.split("\\.");
-        byte[] addrPts = new byte[stringPts.length];
-
-        for (int i = 0; i < stringPts.length; i++) {
             try {
-                Integer pt = Integer.parseInt(stringPts[i]);
-                addrPts[i] = pt.byteValue();
-            } catch (NumberFormatException e) {
-                System.out.println("ERROR   Incorrect input syntax: Server address points are invalid");
-                return;
+                //Create client socket
+                DatagramSocket clientSocket = new DatagramSocket();
+                clientSocket.setSoTimeout(timeout); // sets the timeout specified before raising exception
+
+                //Translate input DNS server to extract ip address
+                String[] stringPts = server.split("\\.");
+                byte[] addrPts = new byte[stringPts.length];
+
+                for (int i = 0; i < stringPts.length; i++) {
+                    try {
+                        int pt = Integer.parseInt(stringPts[i]);
+                        addrPts[i] = (byte) pt;
+                    } catch (NumberFormatException e) {
+                        System.out.println("ERROR   Incorrect input syntax: Server address points are invalid");
+                        return;
+                    }
+                }
+
+                InetAddress IPAddress = InetAddress.getByAddress(addrPts);
+
+                // Summarize query in output
+                System.out.println("\nDnsClient sending request for " + name);
+                System.out.println("Server: " + IPAddress);
+                System.out.println("Request type: " + queryType.toUpperCase() + "\n");
+
+                //Build DNS request
+                // 1. Determine length of domain name for allocation
+                int QNAME_length = 0;
+                String[] labels = name.split("\\."); // Byte per character
+                for (String l : labels) {
+                    QNAME_length += l.length(); // bytes for each character
+                    QNAME_length++; // octet representing the length of label
+                }
+
+                // 2. Create buffer for request packet
+                // 12 bytes for packet header, 4 bytes for QTYPE, QCLASS, 1 byte + variable for domain name + null char
+                ByteBuffer requestData = ByteBuffer.allocate(17 + QNAME_length);
+
+                // 3. Allocate and put data for packet header + question
+                requestData.put(create_request_header());
+                requestData.put(create_request_question(QNAME_length));
+
+                byte[] receiveData = new byte[1024];
+
+                //Create datagram with data-to-send, length, IP addr, port
+                DatagramPacket sendPacket = new DatagramPacket(requestData.array(), requestData.array().length, IPAddress, port);
+
+                //Send datagram to server
+                long startTime = System.currentTimeMillis();
+                clientSocket.send(sendPacket);
+
+                DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
+
+                //READ DATAGRAM FROM SERVER
+                clientSocket.receive(receivePacket);  //fucks up right here
+                long endTime = System.currentTimeMillis();
+
+                long time = endTime - startTime;
+
+                // Valid response received output
+                System.out.println("Response received after " + time + " seconds (" + retries + " retries)");
+
+                String modifiedSentence = new String(receivePacket.getData());
+
+                System.out.println("FROM SERVER:" + modifiedSentence);
+                clientSocket.close();
+
+                //receiving data
+                create_response_header(receivePacket.getData());
+
+                //ONLY WORKS FOR THE DOMAIN NAME
+                create_response_answer(ByteBuffer.wrap(receivePacket.getData()), requestData.array().length);
+
+                System.out.println("the name is" + name);
+                /*
+                 * RESPONSE
+                 */
+
+                return; // Successful query!
+            } catch (SocketTimeoutException e) {
+                System.out.println("ERROR   Socket timed out, will retry request if limit is not exceed.");
+                retries++;
+            } catch (Exception e) {
+                System.out.println(e.getMessage());
             }
         }
 
-        InetAddress IPAddress = InetAddress.getByAddress(addrPts);
-
-        //Build DNS request
-        // 1. Determine length of domain name for allocation
-        int QNAME_length = 0;
-        String[] labels = name.split("\\."); // Byte per character
-        for (String l : labels) {
-            QNAME_length += l.length(); // bytes for each character
-            QNAME_length ++; // octet representing the length of label
-        }
-
-        // 2. Create buffer for request packet
-        // 12 bytes for packet header, 4 bytes for QTYPE, QCLASS, 1 byte + variable for domain name + null char
-        ByteBuffer requestData = ByteBuffer.allocate(17 + QNAME_length);
-
-        // 3. Allocate and put data for packet header + question
-        requestData.put(create_request_header());
-        requestData.put(create_request_question(QNAME_length));
-
-        byte[] receiveData = new byte[1024];
-
-        //Create datagram with data-to-send, length, IP addr, port
-        DatagramPacket sendPacket = new DatagramPacket(requestData.array(), requestData.array().length, IPAddress, port);
-
-        //Send datagram to server
-        clientSocket.send(sendPacket);
-
-        DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
-
-        //READ DATAGRAM FROM SERVER
-        clientSocket.receive(receivePacket);  //fucks up right here
-
-        System.out.println(Arrays.toString(receivePacket.getData()));
-
-        String modifiedSentence = new String(receivePacket.getData());
-
-        System.out.println("FROM SERVER:" + modifiedSentence);
-        clientSocket.close();
-
-        //receiving data
-        create_response_header(receivePacket.getData());
-
-        //ONLY WORKS FOR THE DOMAIN NAME
-        create_response_answer(ByteBuffer.wrap(receivePacket.getData()), requestData.array().length);
-
-        System.out.println("the name is" + name);
-        /*
-         * RESPONSE
-         */
-
-
-
-
+        System.out.println("ERROR   Maximum number of retries " + max_retries + " exceeded.");
     }
 
     /*
