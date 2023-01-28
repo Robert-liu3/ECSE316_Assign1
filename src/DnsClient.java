@@ -153,7 +153,6 @@ public class DnsClient {
                 //done for domain name,
                 create_response_answer(ByteBuffer.wrap(receivePacket.getData()), requestData.array().length);
 
-                System.out.println("the name is " + name);
                 /*
                  * RESPONSE
                  */
@@ -310,17 +309,23 @@ public class DnsClient {
             int length = currentByte & 0xff;
             byte[] label = new byte[length];
             receivedData.get(label);
-            answerName = answerName + new String(label) + ".";
+            answerName = answerName + "." + new String(label);
         }
+        //increment buffer position
+        receivedData.position(++pos);
+
+        name = answerName;
+        System.out.println("the name is " + name);
 
         short QTYPE = receivedData.position(pos++).getShort();
         System.out.println("GType is " + QTYPE);
+
         int TTL = receivedData.position(pos).getInt();
         System.out.println("TTL is " + TTL);
+
         pos = pos + 2;
         short RDLENGTH = receivedData.position(pos++).getShort();
         System.out.println("RDLENGTH is " + RDLENGTH);
-        name = answerName;
     }
 
     public static int getBit(byte b, int position)
