@@ -26,6 +26,8 @@ public class DnsClient {
     private static byte[] QDCOUNT_G = new byte[2];
     private static int ANCOUNT_INT;
     private static byte[] ARCOUNT_G = new byte[2];
+    private static String answerName_G = "";
+    private static String exchange_G = "";
 
 
     public static void main(String[] args) {
@@ -288,10 +290,60 @@ public class DnsClient {
     private static void create_response_answer(ByteBuffer receivedData, int offset) {
         //offset should be the length of the sent data as the sent data ends at question
         receivedData.position(offset);
-        int pos = receivedData.position();
+        String answerName = getString(receivedData);
+//        while (true) {
+//            byte currentByte = receivedData.get();
+//            //check for 2 significant bits
+//            if ((currentByte & 0xc0) == 0xc0) {
+//                //set to unsigned integer (data & 1111 1111)
+//                int firstByte = receivedData.get() & 0xff;
+//                //retrieve 6 least significant bits (current byte & 0011 1111)
+//                int secondByte = currentByte & 0x3f;
+//                //shift secondByte by 8 bits to the left, and combine firstByte - secondByte
+//                int newPOS = (firstByte | (secondByte << 8));
+//                receivedData.position(newPOS);
+//                continue;
+//            }
+//            if (currentByte == 0) {
+//                break;
+//            }
+//            // label
+//            int length = currentByte & 0xff;
+//            byte[] label = new byte[length];
+//            receivedData.get(label);
+//            answerName = answerName + "." + new String(label);
+//        }
+
+        //increment buffer position
+        int pos = receivedData.position() + 1;
+        receivedData.position(pos++);
+
+        answerName_G = answerName;
+        System.out.println("the name is " + answerName_G);
+
+        short QTYPE = receivedData.position(pos).getShort();
+        System.out.println("QType is " + QTYPE);
+
+        pos = pos + 2;
+
+        int TTL = receivedData.position(pos).getInt();
+        System.out.println("TTL is " + TTL);
+
+        pos = pos + 4;
+        short RDLENGTH = receivedData.position(pos).getShort();
+        System.out.println("RDLENGTH is " + RDLENGTH);
+
+        //skipping preference
+        pos = pos + 4;
+        receivedData.position(pos);
+        String exchange = getString(receivedData);
+        exchange_G = exchange;
+    }
+    public static String getString(ByteBuffer receivedData) {
         String answerName = "";
         while (true) {
             byte currentByte = receivedData.get();
+            //check for 2 significant bits
             if ((currentByte & 0xc0) == 0xc0) {
                 //set to unsigned integer (data & 1111 1111)
                 int firstByte = receivedData.get() & 0xff;
@@ -311,21 +363,7 @@ public class DnsClient {
             receivedData.get(label);
             answerName = answerName + "." + new String(label);
         }
-        //increment buffer position
-        receivedData.position(++pos);
-
-        name = answerName;
-        System.out.println("the name is " + name);
-
-        short QTYPE = receivedData.position(pos++).getShort();
-        System.out.println("GType is " + QTYPE);
-
-        int TTL = receivedData.position(pos).getInt();
-        System.out.println("TTL is " + TTL);
-
-        pos = pos + 2;
-        short RDLENGTH = receivedData.position(pos++).getShort();
-        System.out.println("RDLENGTH is " + RDLENGTH);
+        return answerName;
     }
 
     public static int getBit(byte b, int position)
