@@ -315,8 +315,7 @@ public class DnsClient {
 //        }
 
         //increment buffer position
-        int pos = receivedData.position() + 1;
-        receivedData.position(pos++);
+        int pos = receivedData.position() + answerName.length();
 
         answerName_G = answerName;
         System.out.println("the name is " + answerName_G);
@@ -324,20 +323,21 @@ public class DnsClient {
         short QTYPE = receivedData.position(pos).getShort();
         System.out.println("QType is " + QTYPE);
 
-        pos = pos + 2;
+        //skip class
+        receivedData.getShort();
 
         int TTL = receivedData.position(pos).getInt();
         System.out.println("TTL is " + TTL);
 
-        pos = pos + 4;
         short RDLENGTH = receivedData.position(pos).getShort();
         System.out.println("RDLENGTH is " + RDLENGTH);
 
-        //skipping preference
-        pos = pos + 4;
-        receivedData.position(pos);
+        //skip preference
+        receivedData.getShort();
+
         String exchange = getString(receivedData);
         exchange_G = exchange;
+        System.out.println("EXCHANGE is " + exchange_G);
     }
     public static String getString(ByteBuffer receivedData) {
         String answerName = "";
@@ -361,7 +361,7 @@ public class DnsClient {
             int length = currentByte & 0xff;
             byte[] label = new byte[length];
             receivedData.get(label);
-            answerName = answerName + "." + new String(label);
+            answerName = answerName + new String(label) + ".";
         }
         return answerName;
     }
