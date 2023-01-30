@@ -57,7 +57,7 @@ public class DnsClient {
             else if (arg.equals("-ns")) {
                 queryType = "ns";
             }
-            else if (arg.contains("@")) { //CHANGE THIS BACK TO Q
+            else if (arg.contains("@")) {
                 server = arg.replace("@", "");
                 i++;
                 if (server.isBlank() || i == inputArgs.size()) throw new RuntimeException("ERROR   Incorrect input syntax: Server or domain name is invalid");
@@ -144,6 +144,8 @@ public class DnsClient {
                         System.out.println("IP   " + dnsRecord.ipAddr + "   " + dnsRecord.ttl + "   " + auth);
                     } else if (dnsRecord.qType == 2) {
                         System.out.println("NS  " + dnsRecord.alias + " " + dnsRecord.ttl + "   " + auth);
+                    } else if (dnsRecord.qType == 15) {
+                        System.out.println("MX  " + dnsRecord.alias + " " + dnsRecord.pref + "  " + dnsRecord.ttl + "   " + auth);
                     }
                 }
 
@@ -308,12 +310,12 @@ public class DnsClient {
         // RDATA values
         //reset buffer position + 2
         offset += 2;
-        receivedData.position(offset);
-
         System.out.println("The name is " + answerName);
 
         // Fill list of answer records first
         for (int i = 0; i < ANCOUNT_INT; i++) {
+            receivedData.position(offset);
+
             short QTYPE = receivedData.getShort(); // Next 16 bits correspond to QTYPE
 
             short QCLASS = receivedData.getShort();
@@ -321,8 +323,9 @@ public class DnsClient {
 
             int TTL = receivedData.getInt();
 
-            receivedData.getShort(); // for RDLength, and to increment position
+            short RDLENGTH = receivedData.getShort(); // for RDLength, and to increment position
 
+            offset = receivedData.position();
             // A-type, so IP address needs to be created
             if (QTYPE == 1) {
                 // Get IP as an integer, convert to bytes then back to the address received
@@ -334,8 +337,15 @@ public class DnsClient {
             } else if (QTYPE == 2) {
                 String alias = getString(receivedData);
                 answerRecords.add(new AnswerRecord(QTYPE, TTL, null, alias, 0));
+
+            } else if (QTYPE == 15) {
+                int currPos = receivedData.position();
+                String alias = getString(receivedData);
+                int pref = receivedData.position(currPos).getShort();
+                answerRecords.add(new AnswerRecord(QTYPE, TTL, null, alias, pref));
             }
-            
+
+            offset = offset + RDLENGTH + 2;
         }
     }
     public static String getString(ByteBuffer receivedData) {
