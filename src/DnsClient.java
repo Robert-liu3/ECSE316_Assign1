@@ -1,6 +1,6 @@
+import java.math.BigInteger;
 import java.net.*;
 import java.nio.ByteBuffer;
-import java.sql.SQLOutput;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Random;
@@ -20,14 +20,10 @@ public class DnsClient {
     /*
      * Response Global variables
      */
-
-    private static byte[] responseID_G = new byte[2];
-    private static byte[] secondRow_G = new byte[2];
-    private static byte[] QDCOUNT_G = new byte[2];
-    private static int ANCOUNT_INT;
-    private static byte[] ARCOUNT_G = new byte[2];
-    private static String answerName_G = "";
-    private static String exchange_G = "";
+    private static int ANCOUNT_INT = 0;
+    private static int ARCOUNT_INT = 0;
+    private static String auth = null;
+    private static ArrayList<AnswerRecord> answerRecords = new ArrayList<>();
 
 
     public static void main(String[] args) {
@@ -40,22 +36,19 @@ public class DnsClient {
             if (arg.equals("-t")) {
                 try { i++; timeout = Integer.parseInt(inputArgs.get(i)); }
                 catch (NumberFormatException exception) {
-                    System.out.println("ERROR   Incorrect input syntax: Timeout value must be an integer."); //TODO CHANGE THIS
-                    return;
+                    throw new RuntimeException("ERROR   Incorrect input syntax: Timeout value must be an integer.");
                 }
             }
             else if (arg.equals("-r")) {
                 try { i++; max_retries = Integer.parseInt(inputArgs.get(i)); }
                 catch (NumberFormatException exception) {
-                    System.out.println("ERROR   Incorrect input syntax: Max retries value must be an integer."); //TODO CHANGE THIS
-                    return;
+                    throw new RuntimeException("ERROR   Incorrect input syntax: Max retries value must be an integer.");
                 }
             }
             else if (arg.equals("-p")) {
                 try { i++; port = Integer.parseInt(inputArgs.get(i)); }
                 catch (NumberFormatException exception) {
-                    System.out.println("ERROR   Incorrect input syntax: Port number must be an integer."); //TODO CHANGE THIS
-                    return;
+                    throw new RuntimeException("ERROR   Incorrect input syntax: Port number must be an integer.");
                 }
             }
             else if (arg.equals("-mx")) {
@@ -67,10 +60,8 @@ public class DnsClient {
             else if (arg.contains("@")) { //CHANGE THIS BACK TO Q
                 server = arg.replace("@", "");
                 i++;
+                if (server.isBlank() || i == inputArgs.size()) throw new RuntimeException("ERROR   Incorrect input syntax: Server or domain name is invalid");
                 name = inputArgs.get(i);
-                if (server.isBlank() || name.isBlank()) {
-                    System.out.println("ERROR   Incorrect input syntax: Server or domain name is invalid"); //TODO CHANGE THIS
-                }
             }
         }
 
@@ -91,13 +82,8 @@ public class DnsClient {
                 byte[] addrPts = new byte[stringPts.length];
 
                 for (int i = 0; i < stringPts.length; i++) {
-                    try {
-                        int pt = Integer.parseInt(stringPts[i]);
-                        addrPts[i] = (byte) pt;
-                    } catch (NumberFormatException e) {
-                        System.out.println("ERROR   Incorrect input syntax: Server address points are invalid");
-                        return;
-                    }
+                    int pt = Integer.parseInt(stringPts[i]);
+                    addrPts[i] = (byte) pt;
                 }
 
                 InetAddress IPAddress = InetAddress.getByAddress(addrPts);
@@ -130,45 +116,49 @@ public class DnsClient {
                 DatagramPacket sendPacket = new DatagramPacket(requestData.array(), requestData.array().length, IPAddress, port);
 
                 //Send datagram to server
-                long startTime = System.currentTimeMillis();
+                long startTime = System.currentTimeMillis(); // used to calculate time between sent and receive
                 clientSocket.send(sendPacket);
 
                 DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
 
-                //READ DATAGRAM FROM SERVER
-                clientSocket.receive(receivePacket);  //fucks up right here
+                //Read datagram from server
+                clientSocket.receive(receivePacket);
                 long endTime = System.currentTimeMillis();
 
                 long time = endTime - startTime;
 
                 // Valid response received output
-                System.out.println("Response received after " + time + " seconds (" + retries + " retries)");
+                System.out.println("Response received after " + time + " seconds (" + retries + " retries)\n");
 
-                String modifiedSentence = new String(receivePacket.getData());
-
-                System.out.println("FROM SERVER:" + modifiedSentence);
                 clientSocket.close();
 
-                //receiving data HEADER
+                System.out.println(Arrays.toString(receivePacket.getData()));
+                //Receiving data header
                 create_response_header(receivePacket.getData());
 
-                //done for domain name,
                 create_response_answer(ByteBuffer.wrap(receivePacket.getData()), requestData.array().length);
 
-                /*
-                 * RESPONSE
-                 */
+                System.out.println("***Answer Section (" + ANCOUNT_INT + " records)***");
+                for (AnswerRecord dnsRecord : answerRecords) {
+                    if (dnsRecord.qType == 1) {
+                        System.out.println("IP   " + dnsRecord.ipAddr + "   " + dnsRecord.ttl + "   " + auth);
+                    } else if (dnsRecord.qType == 2) {
+                        System.out.println("NS  " + dnsRecord.alias + " " + dnsRecord.ttl + "   " + auth);
+                    }
+                }
 
                 return; // Successful query!
             } catch (SocketTimeoutException e) {
                 System.out.println("ERROR   Socket timed out, will retry request if limit is not exceed.");
                 retries++;
+            } catch (NumberFormatException e) {
+                throw new RuntimeException("ERROR   Incorrect input syntax: Server address points are invalid");
             } catch (Exception e) {
-                System.out.println(e.getMessage());
+                throw new RuntimeException(e.getMessage());
             }
         }
 
-        System.out.println("ERROR   Maximum number of retries " + max_retries + " exceeded.");
+        throw new RuntimeException("ERROR   Maximum number of retries " + max_retries + " exceeded.");
     }
 
     /*
@@ -238,10 +228,10 @@ public class DnsClient {
      * RESPONSE FUNCTIONS
      */
 
+    // Parse the header of the response to get ID, answer record count, etc.
     private static void create_response_header(byte[] receivedData ) {
-        //storing id of response
-        int counter = 0;
-        byte[] responseID = new byte[2];
+        int counter = 0; // used for incrementing and moving in byte arr
+        byte[] responseID = new byte[2]; //storing id of response
         byte[] secondRow = new byte[2];
         byte[] QDCOUNT = new byte[2];
         byte[] ANCOUNT = new byte[2];
@@ -258,19 +248,35 @@ public class DnsClient {
             throw new RuntimeException("ERROR   is not a response.");
         }
 
-        int AA = getBit(secondRow[0], 5); //AUTHORITY???? DO WE NEED TO WORRY ABOUT IT
+        int AA = getBit(secondRow[0], 5); //authority bit
+        if (AA == 0) auth = "nonauth";
+        else if (AA == 1) auth = "auth";
 
-        int TC = getBit(secondRow[0], 6);
+//        int TC = getBit(secondRow[0], 6);
 
-        int RD = getBit(secondRow[0], 7); //not needed cause query
+        int RD = getBit(secondRow[0], 7);
 
         int RA = getBit(secondRow[1], 8); //SHOULD BE PRINTED IF SERVER PROVIDED AN ANSWER, IF NOT THEN PRINT ERROR
 
+        // Check if server supports recursive queries
+        if (RD == 1 && RA == 0) throw new RuntimeException("ERROR   Server does not support recursive queries");
+
+        // Use RCODE to verify records
         int RCODE = secondRow[1] & 15;
+
+        if (RCODE == 1) throw new RuntimeException("ERROR   Name server unable to interpret the query");
+        else if (RCODE == 2) throw new RuntimeException("ERROR  Server failure");
+        else if (RCODE == 3 && AA == 1) {
+            System.out.println("NOTFOUND"); // only thrown if authoritative
+            return;
+        }
+        else if (RCODE == 4) throw new RuntimeException("ERROR  Server does not support kind of query");
+        else if (RCODE == 5) throw new RuntimeException("ERROR  Server refuses to perform requested operation");
 
         QDCOUNT[0] = receivedData[counter++];
         QDCOUNT[1] = receivedData[counter++]; //5
 
+        // Retrieve ANCOUNT to find out how many records there are
         ANCOUNT[0] = receivedData[counter++];
         ANCOUNT[1] = receivedData[counter++]; //7
 
@@ -280,64 +286,57 @@ public class DnsClient {
         }
         ANCOUNT_INT = value;
 
+        value = 0;
         counter = counter + 2;
 
+        // Retrieve ARCOUNT to find out how many *additional* records there are
         ARCOUNT[0] = receivedData[counter++];
         ARCOUNT[1] = receivedData[counter];
+
+        for (byte b : ARCOUNT) {
+            value = (value << 8) + (b & 0xFF);
+        }
+        ARCOUNT_INT = value;
     }
 
-    //FUNCTIONS WORKS WITH NAME ONLY
-    private static void create_response_answer(ByteBuffer receivedData, int offset) {
+    // Parse DNS records for responses
+    private static void create_response_answer(ByteBuffer receivedData, int offset) throws UnknownHostException {
         //offset should be the length of the sent data as the sent data ends at question
         receivedData.position(offset);
         String answerName = getString(receivedData);
-//        while (true) {
-//            byte currentByte = receivedData.get();
-//            //check for 2 significant bits
-//            if ((currentByte & 0xc0) == 0xc0) {
-//                //set to unsigned integer (data & 1111 1111)
-//                int firstByte = receivedData.get() & 0xff;
-//                //retrieve 6 least significant bits (current byte & 0011 1111)
-//                int secondByte = currentByte & 0x3f;
-//                //shift secondByte by 8 bits to the left, and combine firstByte - secondByte
-//                int newPOS = (firstByte | (secondByte << 8));
-//                receivedData.position(newPOS);
-//                continue;
-//            }
-//            if (currentByte == 0) {
-//                break;
-//            }
-//            // label
-//            int length = currentByte & 0xff;
-//            byte[] label = new byte[length];
-//            receivedData.get(label);
-//            answerName = answerName + "." + new String(label);
-//        }
 
-        //increment buffer position
-        int pos = receivedData.position() + answerName.length();
+        // RDATA values
+        //reset buffer position + 2
+        offset += 2;
+        receivedData.position(offset);
 
-        answerName_G = answerName;
-        System.out.println("the name is " + answerName_G);
+        System.out.println("The name is " + answerName);
 
-        short QTYPE = receivedData.position(pos).getShort();
-        System.out.println("QType is " + QTYPE);
+        // Fill list of answer records first
+        for (int i = 0; i < ANCOUNT_INT; i++) {
+            short QTYPE = receivedData.getShort(); // Next 16 bits correspond to QTYPE
 
-        //skip class
-        receivedData.getShort();
+            short QCLASS = receivedData.getShort();
+            if (QCLASS != 1) throw new RuntimeException("ERROR  QCLASS found to be value other than 1");
 
-        int TTL = receivedData.position(pos).getInt();
-        System.out.println("TTL is " + TTL);
+            int TTL = receivedData.getInt();
 
-        short RDLENGTH = receivedData.position(pos).getShort();
-        System.out.println("RDLENGTH is " + RDLENGTH);
+            receivedData.getShort(); // for RDLength, and to increment position
 
-        //skip preference
-        receivedData.getShort();
+            // A-type, so IP address needs to be created
+            if (QTYPE == 1) {
+                // Get IP as an integer, convert to bytes then back to the address received
+                int IP = receivedData.getInt();
+                byte[] bytes = BigInteger.valueOf(IP).toByteArray();
 
-        String exchange = getString(receivedData);
-        exchange_G = exchange;
-        System.out.println("EXCHANGE is " + exchange_G);
+                answerRecords.add(new AnswerRecord(QTYPE, TTL, InetAddress.getByAddress(bytes), null, 0));
+
+            } else if (QTYPE == 2) {
+                String alias = getString(receivedData);
+                answerRecords.add(new AnswerRecord(QTYPE, TTL, null, alias, 0));
+            }
+            
+        }
     }
     public static String getString(ByteBuffer receivedData) {
         String answerName = "";
@@ -363,11 +362,14 @@ public class DnsClient {
             receivedData.get(label);
             answerName = answerName + new String(label) + ".";
         }
-        return answerName;
+        return answerName.substring(0, answerName.length() - 1); // Remove the last period to get proper length
     }
 
+    // Gets the bit at position in byte b
     public static int getBit(byte b, int position)
     {
         return (b >> position) & 1;
     }
+
+    private record AnswerRecord(short qType, int ttl, InetAddress ipAddr, String alias, int pref) {}
 }
