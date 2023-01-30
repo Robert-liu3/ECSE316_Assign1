@@ -23,7 +23,9 @@ public class DnsClient {
     private static int ANCOUNT_INT = 0;
     private static int ARCOUNT_INT = 0;
     private static String auth = null;
+    private static int curr_offset = 0;
     private static ArrayList<AnswerRecord> answerRecords = new ArrayList<>();
+    private static ArrayList<AnswerRecord> additionalRecords = new ArrayList<>();
 
 
     public static void main(String[] args) {
@@ -132,13 +134,20 @@ public class DnsClient {
 
                 clientSocket.close();
 
-                System.out.println(Arrays.toString(receivePacket.getData()));
                 //Receiving data header
                 create_response_header(receivePacket.getData());
 
                 create_response_answer(ByteBuffer.wrap(receivePacket.getData()), requestData.array().length);
 
                 System.out.println("***Answer Section (" + ANCOUNT_INT + " records)***");
+
+                // No records were found
+                if (ANCOUNT_INT <= 0) {
+                    System.out.println("NOTFOUND"); // only thrown if authoritative
+                    return;
+                }
+
+                // Loop through list of records and print for the correct query type
                 for (AnswerRecord dnsRecord : answerRecords) {
                     if (dnsRecord.qType == 1) {
                         System.out.println("IP   " + dnsRecord.ipAddr + "   " + dnsRecord.ttl + "   " + auth);
@@ -146,6 +155,22 @@ public class DnsClient {
                         System.out.println("NS  " + dnsRecord.alias + " " + dnsRecord.ttl + "   " + auth);
                     } else if (dnsRecord.qType == 15) {
                         System.out.println("MX  " + dnsRecord.alias + " " + dnsRecord.pref + "  " + dnsRecord.ttl + "   " + auth);
+                    } else if (dnsRecord.qType == 5) {
+                        System.out.println("CNAME  " + dnsRecord.alias + " " + dnsRecord.ttl + "   " + auth);
+                    }
+                }
+
+                System.out.println("\n***Additional Section (" + ARCOUNT_INT + " records)***");
+
+                for (AnswerRecord addRecord : additionalRecords) {
+                    if (addRecord.qType == 1) {
+                        System.out.println("IP   " + addRecord.ipAddr + "   " + addRecord.ttl + "   " + auth);
+                    } else if (addRecord.qType == 2) {
+                        System.out.println("NS  " + addRecord.alias + " " + addRecord.ttl + "   " + auth);
+                    } else if (addRecord.qType == 15) {
+                        System.out.println("MX  " + addRecord.alias + " " + addRecord.pref + "  " + addRecord.ttl + "   " + auth);
+                    } else if (addRecord.qType == 5) {
+                        System.out.println("CNAME  " + addRecord.alias + " " + addRecord.ttl + "   " + auth);
                     }
                 }
 
@@ -254,14 +279,12 @@ public class DnsClient {
         if (AA == 0) auth = "nonauth";
         else if (AA == 1) auth = "auth";
 
-//        int TC = getBit(secondRow[0], 6);
-
         int RD = getBit(secondRow[0], 7);
 
         int RA = getBit(secondRow[1], 8); //SHOULD BE PRINTED IF SERVER PROVIDED AN ANSWER, IF NOT THEN PRINT ERROR
 
         // Check if server supports recursive queries
-        if (RD == 1 && RA == 0) throw new RuntimeException("ERROR   Server does not support recursive queries");
+        if (RD == 1 && RA == 0) System.out.println("ERROR   Recursion requested but server does not support recursive queries");
 
         // Use RCODE to verify records
         int RCODE = secondRow[1] & 15;
@@ -305,15 +328,21 @@ public class DnsClient {
     private static void create_response_answer(ByteBuffer receivedData, int offset) throws UnknownHostException {
         //offset should be the length of the sent data as the sent data ends at question
         receivedData.position(offset);
-        String answerName = getString(receivedData);
 
         // RDATA values
         //reset buffer position + 2
         offset += 2;
-        System.out.println("The name is " + answerName);
 
+        // Fill lists of answer records and additional ones
+        fillRecords(receivedData, offset, ANCOUNT_INT, false);
+        fillRecords(receivedData, curr_offset, ARCOUNT_INT, true);
+    }
+
+    // Add records to the lists
+    // Input is the received data, offset to start, counter to use and which section contain the records
+    private static void fillRecords(ByteBuffer receivedData, int offset, int count, boolean additional) throws UnknownHostException {
         // Fill list of answer records first
-        for (int i = 0; i < ANCOUNT_INT; i++) {
+        for (int i = 0; i < count; i++) {
             receivedData.position(offset);
 
             short QTYPE = receivedData.getShort(); // Next 16 bits correspond to QTYPE
@@ -323,7 +352,7 @@ public class DnsClient {
 
             int TTL = receivedData.getInt();
 
-            short RDLENGTH = receivedData.getShort(); // for RDLength, and to increment position
+            short RDLENGTH = receivedData.getShort(); // for RDLength (to get length between record RDATA)
 
             offset = receivedData.position();
             // A-type, so IP address needs to be created
@@ -332,23 +361,39 @@ public class DnsClient {
                 int IP = receivedData.getInt();
                 byte[] bytes = BigInteger.valueOf(IP).toByteArray();
 
-                answerRecords.add(new AnswerRecord(QTYPE, TTL, InetAddress.getByAddress(bytes), null, 0));
+                AnswerRecord aRecord = new AnswerRecord(QTYPE, TTL, InetAddress.getByAddress(bytes), null, 0);
+                if (!additional) answerRecords.add(aRecord);
+                else additionalRecords.add(aRecord);
 
-            } else if (QTYPE == 2) {
+            } else if (QTYPE == 2) { // NS, get the alias and return
                 String alias = getString(receivedData);
-                answerRecords.add(new AnswerRecord(QTYPE, TTL, null, alias, 0));
+                AnswerRecord nsRecord = new AnswerRecord(QTYPE, TTL, null, alias, 0);
 
-            } else if (QTYPE == 15) {
-                int currPos = receivedData.position();
+                if (!additional) answerRecords.add(nsRecord);
+                else additionalRecords.add(nsRecord);
+
+            } else if (QTYPE == 15) { // MX, get the alias and preference
+                int pref = receivedData.getShort();
                 String alias = getString(receivedData);
-                int pref = receivedData.position(currPos).getShort();
-                answerRecords.add(new AnswerRecord(QTYPE, TTL, null, alias, pref));
+                AnswerRecord mxRecord = new AnswerRecord(QTYPE, TTL, null, alias, pref);
+
+                if (!additional) answerRecords.add(mxRecord);
+                else additionalRecords.add(mxRecord);
+
+            } else if (QTYPE == 5) { // CNAME, need just the alias
+                String alias = getString(receivedData);
+                AnswerRecord cnameRecord = new AnswerRecord(QTYPE, TTL, null, alias, 0);
+
+                if (!additional) answerRecords.add(cnameRecord);
+                else additionalRecords.add(cnameRecord);
             }
 
             offset = offset + RDLENGTH + 2;
         }
+        curr_offset = offset;
     }
-    public static String getString(ByteBuffer receivedData) {
+
+    private static String getString(ByteBuffer receivedData) {
         String answerName = "";
         while (true) {
             byte currentByte = receivedData.get();
@@ -381,5 +426,6 @@ public class DnsClient {
         return (b >> position) & 1;
     }
 
+    // Record to simplify creating DNS record, empty values are null or 0
     private record AnswerRecord(short qType, int ttl, InetAddress ipAddr, String alias, int pref) {}
 }
